@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    color::palettes::css::{ BLUE, RED, WHITE },
+    color::palettes::css::{ YELLOW },
 };
 
 fn setup(mut cmds: Commands, asset_server: Res<AssetServer>) {
@@ -8,10 +8,10 @@ fn setup(mut cmds: Commands, asset_server: Res<AssetServer>) {
     cmds.spawn((Text::new("学友会"),
 		TextFont {
 		    font: asset_server.load("fonts/ipaexg.ttf"),
-		    font_size: 980.0,
+		    font_size: 1200.0,
 		    ..Default::default()
 		},
-		TextColor(BLUE.into())
+		TextColor(YELLOW.into())
     ));
 }
 

@@ -93,6 +93,9 @@
                                            ]}"
                     patchelf --set-rpath $LD_LIBRARY_PATH $out/bin/electrical-bboard
           '';        
+					postInstall = ''
+											cp -r assets $out/bin/assets
+					'';
         };
       }
     );
