@@ -1,0 +1,7 @@
+[package]
+name = "electrical-bboard"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.17.2", features = [ "bevy_ui", "bevy_ui_render", "bevy_window" ] }
