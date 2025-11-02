@@ -1,6 +1,6 @@
 use bevy::{
     camera::visibility::NoFrustumCulling,
-    color::palettes::{css::BLACK, tailwind::YELLOW_300},
+    color::palettes::{tailwind::YELLOW_300, tailwind::SLATE_900},
     prelude::*,
     text::{TextLayout, TextLayoutInfo},
 };
@@ -25,10 +25,16 @@ fn main() {
 	    }};
     App::new()
         .add_plugins(DefaultPlugins)
+        .insert_resource(ClearColor(Color::Srgba(SLATE_900)))
         .insert_resource(TextQueue {
             texts: preset_snow_freaks,
             current_index: 0,
         })
+        .insert_resource(Config {
+	    text_size: 1080.0,
+	    window_width: 1920.0,
+	    camera_offset: 0.0,
+	})
         .init_resource::<ScrollingState>()
         .init_resource::<ScrollingSpeed>()
         .add_systems(Startup, setup)
@@ -50,6 +56,13 @@ struct TextQueue {
     current_index: usize,
 }
 
+#[derive(Resource)]
+struct Config {
+    text_size: f32,
+    window_width: f32,
+    camera_offset: f32,
+}
+
 #[derive(Resource, Default)]
 struct ScrollingState {
     is_active: bool,
@@ -64,15 +77,19 @@ fn setup(
     mut cmds: Commands,
     asset_server: Res<AssetServer>,
     text_queue: Res<TextQueue>,
+    config: Res<Config>,
     mut scrolling_speed: ResMut<ScrollingSpeed>,
 ) {
     let font = asset_server.load("fonts/ipag.ttf");
     let text_font = TextFont {
         font: font.clone(),
-        font_size: 1080.0,
+        font_size: config.text_size,
         ..default()
     };
-    cmds.spawn(Camera2d);
+    cmds.spawn((
+	Camera2d,
+	Transform::from_translation(Vec3::new(config.camera_offset, 0.0, 0.0))
+    ));
 
     // 最初のテキストを表示（スクロールは無効状態で開始）
     spawn_text(
@@ -80,6 +97,7 @@ fn setup(
         &text_queue.texts[0].content,
         &text_queue.texts[0].duration,
         text_font,
+	&config,
         &mut *scrolling_speed,
     );
 }
@@ -89,21 +107,22 @@ fn spawn_text(
     text: &str,
     duration: &f32,
     text_font: TextFont,
+    config: &Config,
     scrolling_speed: &mut ScrollingSpeed,
 ) {
-    let text_offset = text::calc_text_offset(text);
+    let text_offset = text::calc_text_offset(text, config.text_size, config.window_width);
     println!("Offset: {}", text_offset);
     cmds.spawn((
         Text2d::new(text),
         text_font,
         TextColor(Color::Srgba(YELLOW_300)),
-        TextBackgroundColor(BLACK.into()),
+        TextBackgroundColor(Color::Srgba(SLATE_900)),
         Transform::from_translation(Vec3::new(text_offset, 0.0, 0.0)),
         TextLayout::default(),
         TextScroll,
     ))
     .insert(NoFrustumCulling);
-    scrolling_speed.speed = text::calc_speed(text_offset * 2.0, duration);
+    scrolling_speed.speed = text::calc_speed(text_offset * 2.0, duration, config.window_width);
 }
 
 fn text_scroll(
@@ -127,6 +146,7 @@ fn handle_mouse_click(
     mut text_queue: ResMut<TextQueue>,
     mut cmds: Commands,
     asset_server: Res<AssetServer>,
+    config: Res<Config>,
     waiting_text_query: Query<Entity, (With<TextScroll>, Without<ScrollingActive>)>,
     active_text_query: Query<Entity, (With<TextScroll>, With<ScrollingActive>)>,
     mut scrolling_speed: ResMut<ScrollingSpeed>,
@@ -157,7 +177,7 @@ fn handle_mouse_click(
             let font = asset_server.load("fonts/ipag.ttf");
             let text_font = TextFont {
                 font: font.clone(),
-                font_size: 1080.0,
+                font_size: config.text_size,
                 ..default()
             };
             spawn_text(
@@ -165,6 +185,7 @@ fn handle_mouse_click(
                 &text_queue.texts[text_queue.current_index].content.clone(),
                 &text_queue.texts[text_queue.current_index].duration,
                 text_font,
+		&config,
                 &mut *scrolling_speed,
             );
 
@@ -179,6 +200,7 @@ fn handle_mouse_click(
 fn check_text_completion(
     mut cmds: Commands,
     asset_server: Res<AssetServer>,
+    config: Res<Config>,
     mut text_queue: ResMut<TextQueue>,
     mut scrolling_state: ResMut<ScrollingState>,
     query: Query<(Entity, &Transform, &TextLayoutInfo), (With<TextScroll>, With<ScrollingActive>)>,
@@ -187,7 +209,7 @@ fn check_text_completion(
     let font = asset_server.load("fonts/ipag.ttf");
     let text_font = TextFont {
         font: font.clone(),
-        font_size: 1080.0,
+        font_size: config.text_size,
         ..default()
     };
 
@@ -212,6 +234,7 @@ fn check_text_completion(
                 &text_queue.texts[text_queue.current_index].content.clone(),
                 &text_queue.texts[text_queue.current_index].duration,
                 text_font,
+		&config,
                 &mut *scrolling_speed,
             );
 

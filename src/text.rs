@@ -9,12 +9,12 @@ fn count_ascii(s: &str) -> (usize, usize) {
     })
 }
 
-pub fn calc_text_offset(s: &str) -> f32 {
+pub fn calc_text_offset(s: &str, tsize: f32, wwidth: f32) -> f32 {
     let (ascii, non_ascii) = count_ascii(s);
     println!("{}", non_ascii * 2 + ascii);
-    return ((non_ascii * 2 + ascii) as f32 * 580.0 / 2.0) + (1980.0 / 2.0);
+    return ((non_ascii as f32 * tsize) + (ascii as f32 * tsize * 0.48) + wwidth) / 2.0 + 5.0;
 }
 
-pub fn calc_speed(w: f32, d: &f32) -> f32 {
-    return (w + 1080.0) / d;
+pub fn calc_speed(w: f32, d: &f32, wwidth: f32) -> f32 {
+    return (w + wwidth) / d;
 }
