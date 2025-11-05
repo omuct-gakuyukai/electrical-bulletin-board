@@ -28,13 +28,4 @@ impl BingoState {
             None
         }
     }
-
-    pub fn current(&self) -> Option<u8> {
-        if self.index < self.numbers.len() {
-            let num = self.numbers[self.index];
-            Some(num)
-        } else {
-            None
-        }
-    }
 }
