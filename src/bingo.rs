@@ -1,4 +1,3 @@
-use crate::{loader::Config, text_spawner::spawn_static_text, Showing};
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
 
