@@ -242,7 +242,10 @@ fn handle_websocket_commands(
                 if let Some(text_source) = text_queue.texts.get(index as usize) {
                     let text_content = text_source.content.clone();
                     let text_duration = text_source.duration;
-                    
+
+		    if text_duration == 0.0 {
+			crate::text_spawner::spawn_static_text(&mut commands, &text_content, fonts.text_font.clone());
+		    } else {
                     crate::text_spawner::spawn_text(
                         &mut commands,
                         &text_content,
@@ -251,6 +254,7 @@ fn handle_websocket_commands(
                         &config,
                         &mut *scrolling_speed,
                     );
+		    }
                     
                     text_queue.current_index = index as usize;
                     scrolling_state.is_active = true;

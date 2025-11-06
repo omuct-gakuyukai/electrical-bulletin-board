@@ -133,16 +133,20 @@ fn handle_keyboard_action(
     if keys.just_pressed(KeyCode::Enter) {
             for entity in text_query.iter() {
                 cmds.entity(entity).despawn();
-            }
+	    }
 
-        text_spawner::spawn_text(
-            &mut cmds,
-            &text_queue.texts[text_queue.current_index].content.clone(),
-            &text_queue.texts[text_queue.current_index].duration,
-            fonts.text_font.clone(),
-            &config,
-            &mut *scrolling_speed,
+	if text_queue.texts[text_queue.current_index].duration == 0.0 {
+	    text_spawner::spawn_static_text(&mut cmds, &text_queue.texts[text_queue.current_index].content.clone(), fonts.text_font.clone());
+	} else {
+	    text_spawner::spawn_text(
+		&mut cmds,
+		&text_queue.texts[text_queue.current_index].content.clone(),
+		&text_queue.texts[text_queue.current_index].duration,
+		fonts.text_font.clone(),
+		&config,
+		&mut *scrolling_speed,
         );
+	}
 
         text_queue.current_index += 1;
 
