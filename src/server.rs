@@ -50,11 +50,8 @@ pub enum WsResponse {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BulletinResponse {
-    #[serde(rename = "prev-text")]
     pub prev_text: String,
-    #[serde(rename = "now-text")]
     pub now_text: String,
-    #[serde(rename = "next-text")]
     pub next_text: String,
 }
 
