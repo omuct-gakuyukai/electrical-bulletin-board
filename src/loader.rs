@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug, Resource)]
+#[derive(Serialize, Deserialize, Debug, Resource, Clone)]
 pub struct TextSource {
     pub content: String,
     pub duration: f32,
@@ -15,11 +16,15 @@ pub struct Config {
     pub camera_offset: f32,
 }
 
+#[derive(Resource)]
+pub struct PresetManager {
+    pub presets: HashMap<String, Vec<TextSource>>,
+}
+
 pub fn load_csv(file: &str) -> Result<Vec<TextSource>, Box<dyn Error>> {
     let mut csv_path = std::env::home_dir().unwrap();
     csv_path.push("ebb/presets/".to_string() + file);
     let file_content = std::fs::read_to_string(csv_path)?;
-    println!("{}", file_content);
 
     let rdr = csv::ReaderBuilder::new()
         .has_headers(true)
@@ -29,6 +34,60 @@ pub fn load_csv(file: &str) -> Result<Vec<TextSource>, Box<dyn Error>> {
         .into_deserialize()
         .collect::<Result<Vec<TextSource>, csv::Error>>()?;
     Ok(result)
+}
+
+pub fn load_all_presets() -> Result<HashMap<String, Vec<TextSource>>, Box<dyn Error>> {
+    let mut presets_path = std::env::home_dir().unwrap();
+    presets_path.push("ebb/presets");
+    
+    let mut presets = HashMap::new();
+    
+    if !presets_path.exists() {
+        println!("Warning: Presets directory not found at {:?}", presets_path);
+        return Ok(presets);
+    }
+    
+    let entries = std::fs::read_dir(&presets_path)?;
+    
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if let Some(extension) = path.extension() {
+            if extension == "csv" {
+                if let Some(file_name) = path.file_stem() {
+                    if let Some(preset_name) = file_name.to_str() {
+                        match load_csv(&format!("{}.csv", preset_name)) {
+                            Ok(texts) => {
+                                println!("Loaded preset '{}' with {} texts", preset_name, texts.len());
+                                presets.insert(preset_name.to_string(), texts);
+                            }
+                            Err(e) => {
+                                println!("Failed to load preset '{}': {}", preset_name, e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // デフォルトプリセットがない場合は追加
+    if presets.is_empty() {
+        println!("No presets found, adding default preset");
+        presets.insert("default".to_string(), vec![
+            TextSource {
+                content: "Default Demo Text 1".to_string(),
+                duration: 5.0,
+            },
+            TextSource {
+                content: "Default Demo Text 2".to_string(),
+                duration: 5.0,
+            },
+        ]);
+    }
+    
+    Ok(presets)
 }
 
 pub fn load_config() -> Result<Config, Box<dyn Error>> {
@@ -51,6 +110,23 @@ pub fn unwrap_csv(f: &str) -> Vec<TextSource> {
             }];
         }
     };
+}
+
+pub fn unwrap_all_presets() -> PresetManager {
+    match load_all_presets() {
+        Ok(presets) => PresetManager { presets },
+        Err(e) => {
+            println!("Err: Can't Load Presets: {}", e);
+            let mut default_presets = HashMap::new();
+            default_presets.insert("default".to_string(), vec![
+                TextSource {
+                    content: "This is a Demo Text".to_string(),
+                    duration: 5.0,
+                }
+            ]);
+            PresetManager { presets: default_presets }
+        }
+    }
 }
 
 pub fn unwrap_conf() -> Config {

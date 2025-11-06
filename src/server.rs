@@ -23,7 +23,8 @@ pub enum WsCommand {
     },
     Countdown {
 	method: CountdownMethod,
-    }
+    },
+    ListPresets,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -44,6 +45,7 @@ pub enum WsResponse {
     Bulletin(BulletinResponse),
     Bingo(BingoResponse),
     Countdown(CountdownResponse),
+    PresetList(PresetListResponse),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -65,6 +67,11 @@ pub struct BingoResponse {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CountdownResponse {
     pub status: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PresetListResponse {
+    pub presets: Vec<String>,
 }
 
 #[derive(Resource)]
@@ -203,6 +210,7 @@ fn handle_websocket_commands(
     mut commands: Commands,
     mut ws_channel: ResMut<WebSocketChannel>,
     mut text_queue: ResMut<crate::TextQueue>,
+    preset_manager: Res<crate::loader::PresetManager>,
     mut bingo_state: ResMut<crate::bingo::BingoState>,
     mut scrolling_state: ResMut<crate::ScrollingState>,
     mut scrolling_speed: ResMut<crate::ScrollingSpeed>,
@@ -212,7 +220,19 @@ fn handle_websocket_commands(
 ) {
     while let Ok(command) = ws_channel.command_receiver.try_recv() {
         match command {
-            WsCommand::Bulletin { preset: _, index } => {
+            WsCommand::Bulletin { preset, index } => {
+                // プリセットが指定されていて、現在のプリセットと異なる場合は切り替え
+                if text_queue.current_preset != preset {
+                    if let Some(new_texts) = preset_manager.presets.get(&preset) {
+                        text_queue.texts = new_texts.clone();
+                        text_queue.current_preset = preset.clone();
+                        text_queue.current_index = 0;
+                        println!("Switched to preset: {}", preset);
+                    } else {
+                        println!("Preset '{}' not found, using current preset '{}'", preset, text_queue.current_preset);
+                    }
+                }
+                
                 // 現在のテキストを削除
                 for entity in text_query.iter() {
                     commands.entity(entity).despawn();
@@ -251,6 +271,8 @@ fn handle_websocket_commands(
                     });
                     
                     let _ = ws_channel.response_sender.send(response);
+                } else {
+                    println!("Text index {} not found in preset '{}'", index, text_queue.current_preset);
                 }
             }
             WsCommand::Bingo { method } => {
@@ -292,6 +314,13 @@ fn handle_websocket_commands(
                         let _ = ws_channel.response_sender.send(response);
                     }
                 }
+            }
+            WsCommand::ListPresets => {
+                let preset_names: Vec<String> = preset_manager.presets.keys().cloned().collect();
+                let response = WsResponse::PresetList(PresetListResponse {
+                    presets: preset_names,
+                });
+                let _ = ws_channel.response_sender.send(response);
             }
         }
     }

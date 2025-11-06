@@ -10,20 +10,32 @@ mod text;
 mod text_spawner;
 // mod countdown;
 
-use loader::{Config, TextSource};
+use loader::{Config, TextSource, PresetManager};
 use bingo::BingoState;
 
 fn main() {
-    let preset_snow_freaks: Vec<TextSource> = loader::unwrap_csv("snow_freaks.csv");
+    let preset_manager: PresetManager = loader::unwrap_all_presets();
     let conf: Config = loader::unwrap_conf();
+    
+    // デフォルトのプリセット（最初に見つかったもの、またはdefault）を取得
+    let default_preset_name = preset_manager.presets.keys().next().cloned()
+        .unwrap_or_else(|| "default".to_string());
+    let default_texts = preset_manager.presets.get(&default_preset_name)
+        .cloned()
+        .unwrap_or_else(|| vec![TextSource {
+            content: "No presets available".to_string(),
+            duration: 5.0,
+        }]);
     
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
         .add_plugins(TokioTasksPlugin::default())
         .insert_resource(ClearColor(Color::Srgba(SLATE_900)))
+        .insert_resource(preset_manager)
         .insert_resource(TextQueue {
-            texts: preset_snow_freaks,
+            texts: default_texts,
             current_index: 0,
+            current_preset: default_preset_name,
         })
         .insert_resource(conf)
         .init_resource::<ScrollingState>()
@@ -53,6 +65,7 @@ struct TextScroll;
 pub struct TextQueue {
     texts: Vec<TextSource>,
     current_index: usize,
+    current_preset: String,
 }
 
 #[derive(Resource, Default)]
