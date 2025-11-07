@@ -209,6 +209,7 @@ fn handle_websocket_commands(
     mut text_queue: ResMut<crate::TextQueue>,
     preset_manager: Res<crate::loader::PresetManager>,
     mut bingo_state: ResMut<crate::bingo::BingoState>,
+    mut countdown_timer: ResMut<crate::countdown::CountdownTimer>,
     mut scrolling_state: ResMut<crate::ScrollingState>,
     mut scrolling_speed: ResMut<crate::ScrollingSpeed>,
     config: Res<crate::loader::Config>,
@@ -304,9 +305,13 @@ fn handle_websocket_commands(
             WsCommand::Countdown { method } => {
                 match method {
                     CountdownMethod::Start => {
-                        // カウントダウン開始のロジックをここに実装
-                        // 現在のプロジェクトにはcountdownモジュールがあるようなので、
-                        // それを使用することを想定
+                        // 他のテキストを削除
+                        for entity in text_query.iter() {
+                            commands.entity(entity).despawn();
+                        }
+                        
+                        // カウントダウン開始
+                        countdown_timer.start();
                         
                         let response = WsResponse::Countdown(CountdownResponse {
                             status: "started".to_string(),

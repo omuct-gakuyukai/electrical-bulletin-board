@@ -8,10 +8,11 @@ mod loader;
 mod server;
 mod text;
 mod text_spawner;
-// mod countdown;
+mod countdown;
 
 use loader::{Config, TextSource, PresetManager};
 use bingo::BingoState;
+use countdown::CountdownTimer;
 
 fn main() {
     let preset_manager: PresetManager = loader::unwrap_all_presets();
@@ -42,11 +43,15 @@ fn main() {
         .init_resource::<ScrollingSpeed>()
         .init_resource::<Fonts>()
         .init_resource::<BingoState>()
+        .insert_resource(CountdownTimer::new(10.0))
         .add_systems(Startup, setup)
         .add_systems(Update, text_scroll)
         .add_systems(Update, text_loop)
         .add_systems(Update, check_text_completion)
-        .add_systems(Update, handle_keyboard_action);
+        .add_systems(Update, handle_keyboard_action)
+        .add_systems(Update, countdown::countdown_system)
+        .add_systems(Update, countdown::fade_system)
+        .add_systems(Update, countdown::countdown_finished_system);
     
     // WebSocketサーバーをセットアップ
     server::setup_websocket_server(&mut app);
@@ -153,6 +158,7 @@ fn handle_keyboard_action(
     mut text_queue: ResMut<TextQueue>,
     mut cmds: Commands,
     mut bingo: ResMut<BingoState>,
+    mut countdown_timer: ResMut<CountdownTimer>,
     config: Res<Config>,
     fonts: Res<Fonts>,
     text_query: Query<Entity, With<Showing>>,
@@ -162,6 +168,9 @@ fn handle_keyboard_action(
             for entity in text_query.iter() {
                 cmds.entity(entity).despawn();
 	    }
+
+	// カウントダウンを停止
+	countdown_timer.stop();
 
 	if text_queue.texts[text_queue.current_index].duration == 0.0 {
 	    text_spawner::spawn_static_text(&mut cmds, &text_queue.texts[text_queue.current_index].content.clone(), fonts.text_font.clone());
@@ -184,7 +193,19 @@ fn handle_keyboard_action(
 	for entity in text_query.iter() {
 	    cmds.entity(entity).despawn();
 	}
+	
+	// カウントダウンを停止
+	countdown_timer.stop();
+	
 	text_spawner::spawn_static_text(&mut cmds, &bingo.next().unwrap_or(0).to_string(), fonts.text_font.clone());
+    }
+    if keys.just_pressed(KeyCode::KeyC) {
+        for entity in text_query.iter() {
+            cmds.entity(entity).despawn();
+        }
+        
+        // カウントダウン開始
+        countdown_timer.start();
     }	
 }
 
