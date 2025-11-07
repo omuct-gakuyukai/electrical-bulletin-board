@@ -44,6 +44,7 @@ fn main() {
         .init_resource::<BingoState>()
         .add_systems(Startup, setup)
         .add_systems(Update, text_scroll)
+        .add_systems(Update, text_loop)
         .add_systems(Update, check_text_completion)
         .add_systems(Update, handle_keyboard_action);
     
@@ -81,6 +82,13 @@ pub struct ScrollingSpeed {
 #[derive(Component)]
 pub struct Showing;
 
+#[derive(Component)]
+pub struct LoopingText {
+    pub original_x: f32,
+    pub text_width: f32,
+    pub loop_speed: f32,
+}
+
 fn setup(
     mut cmds: Commands,
     config: Res<Config>,
@@ -108,7 +116,7 @@ fn text_scroll(
     time: Res<Time>,
     scrolling_state: Res<ScrollingState>,
     scrolling_speed: Res<ScrollingSpeed>,
-    mut query: Query<&mut Transform, With<TextScroll>>,
+    mut query: Query<&mut Transform, (With<TextScroll>, Without<LoopingText>)>,
 ) {
     if !scrolling_state.is_active {
         return;
@@ -116,6 +124,26 @@ fn text_scroll(
 
     for mut transform in &mut query {
         transform.translation.x -= scrolling_speed.speed * time.delta_secs()
+    }
+}
+
+fn text_loop(
+    time: Res<Time>,
+    config: Res<Config>,
+    mut query: Query<(&mut Transform, &LoopingText), With<Showing>>,
+) {
+    for (mut transform, looping_text) in &mut query {
+        // 左に移動
+        transform.translation.x -= looping_text.loop_speed * time.delta_secs();
+        
+        // 通常のスクロールと同じ判定ロジックを使用
+        let text_left_edge = transform.translation.x + (looping_text.text_width + config.window_width) / 2.0 + 5.0;
+        
+        // テキストが完全に画面左端を通り過ぎたかチェック（テキスト全体が画面外に出るまで待つ）
+        if text_left_edge < 0.0 {
+            // 右端から再開
+            transform.translation.x = looping_text.original_x;
+        }
     }
 }
      
@@ -165,7 +193,7 @@ fn check_text_completion(
     config: Res<Config>,
     text_queue: ResMut<TextQueue>,
     mut scrolling_state: ResMut<ScrollingState>,
-    query: Query<(Entity, &Transform, &TextLayoutInfo), With<TextScroll>>,
+    query: Query<(Entity, &Transform, &TextLayoutInfo), (With<TextScroll>, Without<LoopingText>)>,
 ) {
 
     for (entity, transform, info) in query.iter() {
