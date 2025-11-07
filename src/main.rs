@@ -43,7 +43,7 @@ fn main() {
         .init_resource::<ScrollingSpeed>()
         .init_resource::<Fonts>()
         .init_resource::<BingoState>()
-        .insert_resource(CountdownTimer::new(10.0))
+        .insert_resource(CountdownTimer::new(15.0, countdown::CountdownMode::Decelerated)) // 15秒、減速モード（デフォルト）
         .add_systems(Startup, setup)
         .add_systems(Update, text_scroll)
         .add_systems(Update, text_loop)
@@ -204,7 +204,32 @@ fn handle_keyboard_action(
             cmds.entity(entity).despawn();
         }
         
-        // カウントダウン開始
+        // 通常のカウントダウン開始（10秒）
+        countdown_timer.mode = countdown::CountdownMode::Normal;
+        countdown_timer.initial_seconds = 10.0;
+        countdown_timer.timer = bevy::time::Timer::from_seconds(10.0, bevy::time::TimerMode::Once);
+        countdown_timer.start();
+    }
+    if keys.just_pressed(KeyCode::KeyX) {
+        for entity in text_query.iter() {
+            cmds.entity(entity).despawn();
+        }
+        
+        // 加速カウントダウン開始（15秒）
+        countdown_timer.mode = countdown::CountdownMode::Accelerated;
+        countdown_timer.initial_seconds = 15.0;
+        countdown_timer.timer = bevy::time::Timer::from_seconds(15.0, bevy::time::TimerMode::Once);
+        countdown_timer.start();
+    }
+    if keys.just_pressed(KeyCode::KeyZ) {
+        for entity in text_query.iter() {
+            cmds.entity(entity).despawn();
+        }
+        
+        // 減速カウントダウン開始（15秒）
+        countdown_timer.mode = countdown::CountdownMode::Decelerated;
+        countdown_timer.initial_seconds = 15.0;
+        countdown_timer.timer = bevy::time::Timer::from_seconds(15.0, bevy::time::TimerMode::Once);
         countdown_timer.start();
     }	
 }

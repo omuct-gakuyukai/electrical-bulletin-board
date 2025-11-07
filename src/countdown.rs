@@ -9,7 +9,18 @@ pub struct CountdownTimer {
     pub initial_seconds: f32,
     pub is_active: bool,
     pub last_displayed_number: i32,
-    pub just_finished: bool, // カウントダウン終了を通知するフラグ
+    pub just_finished: bool,
+    pub current_number_start_time: f32, // 現在の数字が表示開始された時間
+    pub total_elapsed_time: f32, // カウントダウン開始からの総経過時間
+    pub mode: CountdownMode, // カウントダウンモード
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum CountdownMode {
+    #[default]
+    Normal,      // 通常の等間隔
+    Accelerated, // 線形加速（最初遅く、後半速く）
+    Decelerated, // 線形減速（最初速く、後半遅く）
 }
 
 #[derive(Component)]
@@ -33,27 +44,34 @@ pub enum FadePhase {
 }
 
 impl CountdownTimer {
-    pub fn new(seconds: f32) -> Self {
+    pub fn new(seconds: f32, mode: CountdownMode) -> Self {
         Self {
             timer: Timer::from_seconds(seconds, TimerMode::Once),
             initial_seconds: seconds,
             is_active: false,
             last_displayed_number: -1,
             just_finished: false,
+            current_number_start_time: 0.0,
+            total_elapsed_time: 0.0,
+            mode,
         }
     }
     
     pub fn start(&mut self) {
         self.timer.reset();
         self.is_active = true;
-        self.last_displayed_number = -1; // リセット
+        self.last_displayed_number = -1;
         self.just_finished = false;
+        self.current_number_start_time = 0.0;
+        self.total_elapsed_time = 0.0;
     }
     
     pub fn stop(&mut self) {
         self.is_active = false;
         self.last_displayed_number = -1;
         self.just_finished = false;
+        self.current_number_start_time = 0.0;
+        self.total_elapsed_time = 0.0;
     }
     
     pub fn remaining_seconds(&self) -> f32 {
@@ -63,10 +81,74 @@ impl CountdownTimer {
             self.initial_seconds
         }
     }
+    
+    // 加速度的カウントダウンでの現在の表示数字を計算
+    pub fn get_accelerated_number(&self) -> i32 {
+        if self.mode == CountdownMode::Normal || self.total_elapsed_time <= 0.0 {
+            return if self.remaining_seconds() > 0.0 {
+                self.remaining_seconds().ceil() as i32
+            } else {
+                0
+            };
+        }
+        
+        // 20秒間で10→0のカウントダウン
+        let target_times = match self.mode {
+            CountdownMode::Accelerated => Self::calculate_accelerated_times(),
+            CountdownMode::Decelerated => Self::calculate_decelerated_times(),
+            CountdownMode::Normal => return self.remaining_seconds().ceil() as i32,
+        };
+        
+        let mut accumulated_time = 0.0;
+        for (number, duration) in target_times.iter().enumerate() {
+            accumulated_time += duration;
+            if self.total_elapsed_time < accumulated_time {
+                return 10 - number as i32;
+            }
+        }
+        
+        0 // 最後
+    }
+    
+    // 線形加速（最初遅く、後半速く）
+    fn calculate_accelerated_times() -> Vec<f32> {
+        let mut times = Vec::new();
+        
+        // 初期値1.8秒、最終値1.3秒の線形加速
+        let initial_time = 1.8; // 数字10の表示時間
+        let final_time = 1.3;   // 数字1の表示時間
+        
+        for i in 0..10 {
+            // 線形補間：i=0(数字10)で1.8秒、i=9(数字1)で1.3秒
+            let progress = i as f32 / 9.0; // 0.0 ~ 1.0
+            let time = initial_time + (final_time - initial_time) * progress;
+            times.push(time);
+        }
+        
+        times
+    }
+    
+    // 線形減速（最初速く、後半遅く）
+    fn calculate_decelerated_times() -> Vec<f32> {
+        let mut times = Vec::new();
+        
+        // 初期値1.3秒、最終値1.8秒の線形減速
+        let initial_time = 1.3; // 数字10の表示時間
+        let final_time = 1.8;   // 数字1の表示時間
+        
+        for i in 0..10 {
+            // 線形補間：i=0(数字10)で1.3秒、i=9(数字1)で1.8秒
+            let progress = i as f32 / 9.0; // 0.0 ~ 1.0
+            let time = initial_time + (final_time - initial_time) * progress;
+            times.push(time);
+        }
+        
+        times
+    }
 }
 
 pub fn setup_countdown_timer(mut commands: Commands) {
-    commands.insert_resource(CountdownTimer::new(10.0));
+    commands.insert_resource(CountdownTimer::new(10.0, CountdownMode::Normal));
 }
 
 pub fn countdown_system(
@@ -81,12 +163,17 @@ pub fn countdown_system(
     }
 
     countdown_timer.timer.tick(time.delta());
+    countdown_timer.total_elapsed_time += time.delta_secs();
     
-    let remaining = countdown_timer.remaining_seconds();
-    let current_number = if remaining > 0.0 {
-        remaining.ceil() as i32
+    let current_number = if countdown_timer.mode == CountdownMode::Normal {
+        let remaining = countdown_timer.remaining_seconds();
+        if remaining > 0.0 {
+            remaining.ceil() as i32
+        } else {
+            0
+        }
     } else {
-        0
+        countdown_timer.get_accelerated_number()
     };
     
     // 数字が変わった場合のみ更新
@@ -102,10 +189,19 @@ pub fn countdown_system(
         spawn_countdown_text(&mut commands, &display_text, fonts.text_font.clone());
         
         countdown_timer.last_displayed_number = current_number;
+        countdown_timer.current_number_start_time = countdown_timer.total_elapsed_time;
+        
+        println!("Countdown: {} (elapsed: {:.2}s)", current_number, countdown_timer.total_elapsed_time);
     }
     
-    // タイマー終了チェック
-    if countdown_timer.timer.is_finished() && countdown_timer.is_active {
+    // タイマー終了チェック（変動モードでは固定時間×10、通常モードは設定時間）
+    let should_finish = if countdown_timer.mode != CountdownMode::Normal {
+        countdown_timer.total_elapsed_time >= 15.5 // 1.3～1.8秒×10 ≈ 15.5秒
+    } else {
+        countdown_timer.timer.is_finished()
+    };
+    
+    if should_finish && countdown_timer.is_active {
         countdown_timer.stop();
         countdown_timer.just_finished = true;
         println!("Countdown finished! Ready for exit guidance.");

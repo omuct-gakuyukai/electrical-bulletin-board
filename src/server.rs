@@ -12,18 +12,15 @@ use serde::{Deserialize, Serialize};
 use futures_util::{SinkExt, StreamExt};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(tag = "mode", rename_all = "snake_case")]
+#[serde(tag = "mode")]
 pub enum WsCommand {
-    Bulletin {
-	preset: String,
-	index: u32,
-    },
-    Bingo {
-	method: BingoMethod,
-    },
-    Countdown {
-	method: CountdownMethod,
-    },
+    #[serde(rename = "bulletin")]
+    Bulletin { preset: String, index: u32 },
+    #[serde(rename = "bingo")]
+    Bingo { method: BingoMethod },
+    #[serde(rename = "countdown")]
+    Countdown { method: CountdownMethod, seconds: Option<f32>, countdown_mode: Option<String> },
+    #[serde(rename = "list_presets")]
     ListPresets,
 }
 
@@ -302,7 +299,7 @@ fn handle_websocket_commands(
                     }
                 }
             }
-            WsCommand::Countdown { method } => {
+            WsCommand::Countdown { method, seconds, countdown_mode } => {
                 match method {
                     CountdownMethod::Start => {
                         // 他のテキストを削除
@@ -310,11 +307,28 @@ fn handle_websocket_commands(
                             commands.entity(entity).despawn();
                         }
                         
-                        // カウントダウン開始
+                        // カウントダウンモードを設定（デフォルト: Decelerated）
+                        let mode_value = match countdown_mode.as_deref() {
+                            Some("normal") => crate::countdown::CountdownMode::Normal,
+                            Some("accelerated") => crate::countdown::CountdownMode::Accelerated,
+                            Some("decelerated") | None => crate::countdown::CountdownMode::Decelerated, // デフォルト
+                            _ => crate::countdown::CountdownMode::Decelerated,
+                        };
+                        
+                        let duration = seconds.unwrap_or(15.0); // デフォルト15秒
+                        
+                        countdown_timer.mode = mode_value;
+                        countdown_timer.initial_seconds = duration;
+                        countdown_timer.timer = bevy::time::Timer::from_seconds(duration, bevy::time::TimerMode::Once);
                         countdown_timer.start();
                         
                         let response = WsResponse::Countdown(CountdownResponse {
-                            status: "started".to_string(),
+                            status: format!("started {} mode ({}s)", 
+                                match mode_value {
+                                    crate::countdown::CountdownMode::Normal => "normal",
+                                    crate::countdown::CountdownMode::Accelerated => "accelerated", 
+                                    crate::countdown::CountdownMode::Decelerated => "decelerated",
+                                }, duration),
                         });
                         
                         let _ = ws_channel.response_sender.send(response);
