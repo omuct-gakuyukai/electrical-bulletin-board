@@ -1,4 +1,4 @@
-# Electrical Bulletin Board System for Kosen Fes
+# NexBoard
 
 ## What is this?
 
